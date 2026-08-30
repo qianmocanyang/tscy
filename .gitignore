@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# 密钥（API Key 永远不要提交）
+config/secrets.json
+
+# 运行时产物
+models/
+cache/
+logs/
+config/config.json
+
+# 打包产物
+build/
+dist/
+*.spec
+*.exe
+*.zip
+
+# WorkBuddy 项目数据（记忆、会话等，不进仓库）
+.workbuddy/

@@ -1,0 +1,105 @@
+{
+  "mode": "two_step",
+  "target_lang": "zh",
+  "source_lang": "auto",
+  "audio": {
+    "device": null,
+    "sample_rate": 16000,
+    "frame_ms": 30,
+    "channels": 1
+  },
+  "vad": {
+    "start_db": -40,
+    "end_db": -45,
+    "start_frames": 3,
+    "silence_ms": 600,
+    "min_ms": 300,
+    "max_ms": 15000,
+    "trim_silence": true,
+    "pre_roll_ms": 300
+  },
+  "asr": {
+    "backend": "whisper",
+    "model_size": "base",
+    "device": "auto",
+    "compute_type": "auto",
+    "beam_size": 1,
+    "vad_filter": true,
+    "condition_on_previous_text": false,
+    "min_conf": 0.5,
+    "prefer_whisper_translate": true,
+    "model_dir": "models",
+    "initial_prompt": "",
+    "hf_endpoint": "auto",
+    "qwen_key": "",
+    "qwen_model": "paraformer-v2",
+    "qwen_language_hints": [
+      "zh",
+      "en",
+      "ja",
+      "ko",
+      "ru"
+    ]
+  },
+  "translate": {
+    "backend": "auto",
+    "fallback": "mymemory",
+    "timeout": 6,
+    "retries": 1,
+    "cache_size": 2000,
+    "cache_file": "cache/trans_cache.json",
+    "glossary": {},
+    "deepl_key": "",
+    "deepl_free": true,
+    "mymemory_email": "",
+    "openai_key": "",
+    "openai_base_url": "https://api.openai.com/v1",
+    "openai_model": "gpt-4o-mini",
+    "qwen_key": ""
+  },
+  "output": {
+    "subtitle": true,
+    "speech": true,
+    "tts_engine": "edge",
+    "tts_interrupt": true,
+    "tts_volume": 1.0,
+    "tts_rate": "+0%",
+    "tts_voice": "",
+    "max_tts_chars": 200,
+    "qwen_key": "",
+    "qwen_tts_model": "cosyvoice-v3-flash",
+    "qwen_tts_voice": "longanyang"
+  },
+  "overlay": {
+    "x": 0.5,
+    "y": 0.86,
+    "width_ratio": 0.52,
+    "font_size": 21,
+    "src_font_size": 14,
+    "duration_ms": 5000,
+    "show_source": true,
+    "max_entries": 3,
+    "bg": "#000000",
+    "bg_alpha": 0.78,
+    "fg": "#FFFFFF",
+    "src_fg": "#9FB3C8",
+    "accent": "#4FC3F7",
+    "warn": "#FFB74D",
+    "padding": 12,
+    "radius": 14,
+    "click_through": true
+  },
+  "hotkeys": {
+    "record": "f9",
+    "emit": "f10",
+    "cancel": "f11",
+    "cycle_target": "ctrl+alt+l",
+    "toggle_overlay": "ctrl+alt+o",
+    "toggle_speech": "ctrl+alt+s",
+    "settings": "ctrl+alt+p",
+    "quit": "ctrl+alt+q"
+  },
+  "log": {
+    "level": "INFO"
+  }
+}
