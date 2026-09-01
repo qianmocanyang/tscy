@@ -96,9 +96,22 @@ class Overlay:
         self._apply_alpha()
 
         self._running = True
-        self.root.withdraw()          # 没有内容时先藏起来
+        # 不 withdraw：overlay 的 Tk 是设置面板/主窗口的父窗口，
+        # withdraw 父窗口在某些情况下会导致子窗口也跟着消失（UI 一闪而过）。
+        # 改为缩到 1x1 全透明，等有字幕内容时再展开。
+        self._hide()
         self.root.after(120, self._tick)
         log.info("字幕浮层已就绪")
+
+    def _hide(self) -> None:
+        """把浮层缩成 1x1 透明点，但保持窗口存在。"""
+        if self.root is None:
+            return
+        try:
+            self.root.geometry("1x1+0+0")
+            self.canvas.delete("all")
+        except Exception as e:
+            log.debug(f"隐藏浮层失败: {e}")
 
     def run(self) -> None:
         """进入 tkinter 主循环（阻塞，必须主线程）。"""
@@ -252,7 +265,7 @@ class Overlay:
             entries = list(self._entries)
 
         if not self._visible or not entries:
-            self.root.withdraw()
+            self._hide()
             return
 
         self.root.deiconify()

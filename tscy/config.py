@@ -146,6 +146,7 @@ DEFAULTS: dict[str, Any] = {
         "toggle_overlay": "ctrl+alt+o", # 显示/隐藏浮层
         "toggle_speech": "ctrl+alt+s",  # 开关语音播报
         "settings": "ctrl+alt+p",       # 打开设置面板
+        "show_main": "ctrl+alt+m",      # 显示主控制窗口
         "quit": "ctrl+alt+q",
     },
 

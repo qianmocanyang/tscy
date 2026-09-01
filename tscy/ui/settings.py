@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import math
+import threading
 import tkinter as tk
 from pathlib import Path
 from typing import Callable
@@ -73,6 +74,7 @@ class SettingsWindow:
         self._logo_tk: ImageTk.PhotoImage | None = None
         self._visible = False
         self._mouse = {"x": 0, "y": 0, "dragging": False}
+        self._main_thread_id = threading.get_ident()
         # 保存控件 id 到回调的映射
         self._click_map: dict[int, Callable] = {}
         self._hover_map: dict[int, tuple[int, str]] = {}  # id -> (bg_id, normal_fill)
@@ -80,6 +82,14 @@ class SettingsWindow:
     # ---------- 生命周期 ----------
 
     def open(self, parent: tk.Tk) -> None:
+        # 防御：如果被热键/托盘线程直接调用，调度回主线程，
+        # 否则跨线程创建 Toplevel 会段错误或窗口一闪而过
+        if threading.get_ident() != self._main_thread_id:
+            try:
+                parent.after(0, lambda: self.open(parent))
+            except Exception:
+                pass
+            return
         if self.window is not None and self.window.winfo_exists():
             self.window.lift()
             self.window.focus_force()
@@ -138,7 +148,7 @@ class SettingsWindow:
 
         # 关闭按钮
         self._make_button(self.WIDTH - 44, 18, 26, 26, "×",
-                          cmd=self.close, fg=COL_DIM, hover_fg=COL_TEXT)
+                          cmd=self.close, bg=COL_BG, fg=COL_DIM, hover=COL_HOVER)
 
         y = 84
         gap = 14

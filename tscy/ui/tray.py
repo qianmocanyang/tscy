@@ -81,10 +81,13 @@ class TrayIcon:
         ])
 
         menu = pystray.Menu(
+            pystray.MenuItem("显示主界面", _safe(self.controller.show_main)),
             pystray.MenuItem("打开设置", _safe(self.controller.open_settings)),
             pystray.MenuItem("目标语言", lang_menu),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("切换字幕", _safe(self.controller.toggle_overlay)),
             pystray.MenuItem("切换语音", _safe(self.controller.toggle_speech)),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", _safe(self.controller.quit)),
         )
 

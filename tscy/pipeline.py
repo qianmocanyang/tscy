@@ -31,6 +31,7 @@ from .output.overlay import Overlay
 from .output.tts import TTS
 from .translate.translator import Translator
 from .types import Translation, Utterance
+from .ui.main_window import MainWindow
 from .ui.settings import SettingsWindow
 from .ui.tray import TrayIcon
 
@@ -115,7 +116,18 @@ class Pipeline:
         self._worker_thread: threading.Thread | None = None
         self.hotkeys = HotkeyManager()
         self.settings = SettingsWindow(cfg, on_change=self._on_config_changed)
+        self.main_window = MainWindow(
+            cfg,
+            on_set_lang=self.set_target_lang,
+            on_open_settings=self.on_open_settings,
+            on_quit=self.on_quit,
+            status_provider=self.get_status,
+        )
         self.tray = TrayIcon(self)
+
+        # 记录主线程 ID，热键/托盘回调来自其它线程，
+        # 所有 UI 操作必须调度回主线程执行（tkinter 非线程安全）
+        self._main_thread_id = threading.get_ident()
 
         # 录音缓冲同时被 PortAudio 线程和热键线程访问，用一把锁保护
         self._state_lock = threading.RLock()
@@ -125,6 +137,10 @@ class Pipeline:
     def start(self) -> None:
         """启动。会阻塞在 tkinter 主循环上，退出时返回。"""
         self.overlay.start()
+
+        # 主控制窗口：启动即显示（父窗口是 overlay 的 Tk）
+        self.main_window.attach_parent(self.overlay.root)
+        self.main_window.open(self.overlay.root)
 
         if not is_admin():
             log.warning(
@@ -213,7 +229,35 @@ class Pipeline:
         self.hotkeys.register("toggle_overlay", hk.get("toggle_overlay", ""), on_press=self.on_toggle_overlay)
         self.hotkeys.register("toggle_speech", hk.get("toggle_speech", ""), on_press=self.on_toggle_speech)
         self.hotkeys.register("settings", hk.get("settings", ""), on_press=self.on_open_settings)
+        self.hotkeys.register("show_main", hk.get("show_main", ""), on_press=self.on_show_main)
         self.hotkeys.register("quit", hk.get("quit", ""), on_press=self.on_quit)
+
+    def _ui(self, fn) -> None:
+        """
+        把 UI 操作调度到主线程执行。
+
+        为什么必须这样：
+            热键（keyboard）和托盘（pystray）的回调跑在各自线程里，
+            直接在这些线程里创建/修改 tkinter 窗口是未定义行为 ——
+            窗口会"一闪而过"或随机崩溃。tkinter 只能在主线程碰。
+        """
+        root = self.overlay.root if self.overlay else None
+        if root is None:
+            try:
+                fn()
+            except Exception as e:
+                log.error(f"UI 操作失败: {e}")
+            return
+        if threading.get_ident() == self._main_thread_id:
+            try:
+                fn()
+            except Exception as e:
+                log.error(f"UI 操作失败: {e}")
+        else:
+            try:
+                root.after(0, fn)
+            except Exception as e:
+                log.error(f"UI 调度失败: {e}")
 
     def on_record_press(self) -> None:
         if self.mode == MODE_PTT:
@@ -246,6 +290,9 @@ class Pipeline:
         log.info("已取消当前片段")
 
     def on_cycle_target(self) -> None:
+        self._ui(self._do_cycle_target)
+
+    def _do_cycle_target(self) -> None:
         cur = self.cfg.get("target_lang", "zh")
         nxt = next_lang(cur)
         self.cfg.set("target_lang", nxt, save=True)
@@ -253,6 +300,9 @@ class Pipeline:
         log.info(f"目标语言切换: {display(cur)} → {display(nxt)}")
 
     def on_toggle_overlay(self) -> None:
+        self._ui(self._do_toggle_overlay)
+
+    def _do_toggle_overlay(self) -> None:
         vis = self.overlay.toggle()
         log.info(f"字幕浮层: {'显示' if vis else '隐藏'}")
 
@@ -266,11 +316,24 @@ class Pipeline:
         log.info(f"语音播报: {'开' if not cur else '关'}")
 
     def on_open_settings(self) -> None:
+        self._ui(self._do_open_settings)
+
+    def _do_open_settings(self) -> None:
         if self.overlay and self.overlay.root:
             self.settings.open(self.overlay.root)
 
+    def on_show_main(self) -> None:
+        self._ui(self.main_window.show)
+
+    def show_main(self) -> None:
+        """托盘/其它线程唤回主窗口。"""
+        self._ui(self.main_window.show)
+
     def set_target_lang(self, code: str) -> None:
         """托盘菜单直接指定目标语言。"""
+        self._ui(lambda: self._do_set_target_lang(code))
+
+    def _do_set_target_lang(self, code: str) -> None:
         from .lang import supported_codes
 
         if code not in supported_codes():
@@ -456,6 +519,46 @@ class Pipeline:
 
         tag = "缓存" if tr.cached else tr.backend
         log.info(f"输出 [{u_arrow(tr.src_lang, tr.dst_lang)} · {tag} {tr.ms}ms] {tr.dst_text}")
+
+        # 主控制窗口的最近翻译记录（线程安全，内部会调度回主线程）
+        try:
+            self.main_window.add_record(tr.src_text, tr.dst_text, tag)
+        except Exception as e:
+            log.debug(f"主窗口记录追加失败: {e}")
+
+    # ==================== 状态查询（主窗口用） ====================
+
+    def get_status(self) -> dict:
+        """给主控制窗口的状态总览。"""
+        asr_backend = (self.cfg.get("asr.backend") or "whisper").lower()
+        if asr_backend == "qwen":
+            asr_txt = f"千问 {getattr(self.asr, 'model', 'paraformer-v2')}"
+            asr_ready = bool(getattr(self.asr, "available", lambda: False)())
+        else:
+            asr_txt = f"Whisper {self.asr.model_size}"
+            asr_ready = bool(getattr(self.asr, "is_loaded", False))
+
+        tr = self.translator
+        backend_cfg = (self.cfg.get("translate.backend") or "auto").lower()
+        if backend_cfg == "auto":
+            chosen = getattr(tr, "_primary_name", "auto")
+            tr_txt = f"{chosen}（auto）" if chosen != "auto" else "探测中…"
+        else:
+            tr_txt = backend_cfg
+
+        tts_cfg = (self.cfg.get("output.tts_engine") or "edge").lower()
+        tts_txt = {
+            "edge": "Edge-tts", "qwen": "千问 CosyVoice",
+            "pyttsx3": "系统语音", "off": "关闭",
+        }.get(tts_cfg, tts_cfg)
+
+        return {
+            "asr": asr_txt,
+            "asr_ready": asr_ready,
+            "translate": tr_txt,
+            "tts": tts_txt,
+            "recording": self._recording,
+        }
 
     # ==================== 配置热重载 ====================
 

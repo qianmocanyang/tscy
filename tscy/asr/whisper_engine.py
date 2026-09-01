@@ -236,6 +236,11 @@ class WhisperEngine(BaseASR):
             log.info("模型加载完成")
 
     @property
+    def is_loaded(self) -> bool:
+        """模型是否已经加载完成（供 UI 状态展示）。"""
+        return self._model is not None
+
+    @property
     def model(self):
         if self._model is None:
             self.load()
